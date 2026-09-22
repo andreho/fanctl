@@ -1,1 +1,4 @@
 /target
+# Screenshot pipeline intermediates (screenshot.gif is the committed artifact)
+demo.gif
+demo1.gif
