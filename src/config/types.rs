@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::curve::CurvePoint;
+
 /// How to combine the readings of several sensors into a single driving value
 /// for a fan's curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -98,9 +100,15 @@ pub struct Pwm {
     #[serde(default)]
     pub control: ControlKind,
 
-    /// The duty curve as a list of `[temp °C, duty %]` pairs.
+    /// The duty curve as a list of `{ temp °C, duty % }` points, e.g.
+    ///
+    /// ```yaml
+    /// curve:
+    ///   - temp: 30.0
+    ///     duty: 45.0
+    /// ```
     #[serde(default)]
-    pub curve: Vec<[f64; 2]>,
+    pub curve: Vec<CurvePoint>,
 
     /// The initial mode.
     #[serde(default)]

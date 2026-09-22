@@ -61,11 +61,15 @@ pwm:
         sensor: gpu1
     aggregation: max      # max (hottest) | avg | min
     control: curve        # curve (fanctl-driven) | kernel-auto
-    curve:                # [temperature °C, duty %] pairs
-      - [30, 0]
-      - [45, 40]
-      - [60, 75]
-      - [75, 100]
+    curve:                # temperature→duty curve (°C → %)
+      - temp: 30
+        duty: 0
+      - temp: 45
+        duty: 40
+      - temp: 60
+        duty: 75
+      - temp: 75
+        duty: 100
     default: auto         # initial mode: auto | off | full
 
   # A second fan following a single GPU.
@@ -78,8 +82,10 @@ pwm:
     aggregation: max
     control: curve
     curve:
-      - [30, 0]
-      - [70, 100]
+      - temp: 30
+        duty: 0
+      - temp: 70
+        duty: 100
     default: auto
 
 temp_sensors:              # what the TUI displays (NVIDIA GPUs are always shown)

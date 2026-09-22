@@ -4,10 +4,16 @@
 use std::path::Path;
 
 use super::types::{Aggregation, Config, ControlKind, InitialMode, Pwm, TempRef, TempSensor};
+use crate::curve::CurvePoint;
 use crate::hwmon;
 
 /// A reasonable per-fan curve to seed auto-generated config from.
-const DEFAULT_CURVE: [[f64; 2]; 4] = [[30.0, 0.0], [45.0, 40.0], [60.0, 75.0], [75.0, 100.0]];
+const DEFAULT_CURVE: [CurvePoint; 4] = [
+    CurvePoint::new(30.0, 0.0),
+    CurvePoint::new(45.0, 40.0),
+    CurvePoint::new(60.0, 75.0),
+    CurvePoint::new(75.0, 100.0),
+];
 
 /// Probe `base` (the hwmon tree) and produce a default config.
 pub fn generate(base: &Path) -> Config {

@@ -24,6 +24,7 @@ pub fn save(path: &Path, config: &Config) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use crate::config::types::{Aggregation, Config, ControlKind, InitialMode, Pwm, TempRef, TempSensor};
+    use crate::curve::CurvePoint;
 
     fn sample() -> Config {
         Config {
@@ -40,7 +41,12 @@ mod tests {
                 temp_sensor: None,
                 aggregation: Aggregation::Max,
                 control: ControlKind::Curve,
-                curve: vec![[30.0, 0.0], [45.0, 40.0], [60.0, 75.0], [75.0, 100.0]],
+                curve: vec![
+                    CurvePoint::new(30.0, 0.0),
+                    CurvePoint::new(45.0, 40.0),
+                    CurvePoint::new(60.0, 75.0),
+                    CurvePoint::new(75.0, 100.0),
+                ],
                 default: InitialMode::Auto,
             }],
             temp_sensors: vec![TempSensor { hwmon: "acpitz".into(), sensors: vec!["temp1".into()] }],
@@ -71,16 +77,18 @@ mod tests {
     fn round_trips() {
         let cfg = sample();
         let s = serde_yaml::to_string(&cfg).unwrap();
-        // The curve must serialize as a 2-element sequence.
+        // The curve must serialize as a list of `{temp, duty}` maps.
         assert!(s.contains("curve"), "config:\n{s}");
+        assert!(s.contains("temp: 30.0"), "config:\n{s}");
+        assert!(s.contains("duty: 40.0"), "config:\n{s}");
         let back: Config = serde_yaml::from_str(&s).unwrap();
         assert_eq!(back, cfg);
     }
 
     #[test]
     fn parses_curve_points() {
-        let s = "pwm:\n  - id: pwm1\n    hwmon: it8792\n    temp_sensor: { hwmon: it8792, sensor: temp1 }\n    curve: [[30, 0], [75, 100]]\n";
+        let s = "pwm:\n  - id: pwm1\n    hwmon: it8792\n    temp_sensor: { hwmon: it8792, sensor: temp1 }\n    curve:\n      - { temp: 30, duty: 0 }\n      - { temp: 75, duty: 100 }\n";
         let cfg: Config = serde_yaml::from_str(s).unwrap();
-        assert_eq!(cfg.pwm[0].curve, vec![[30.0, 0.0], [75.0, 100.0]]);
+        assert_eq!(cfg.pwm[0].curve, vec![CurvePoint::new(30.0, 0.0), CurvePoint::new(75.0, 100.0)]);
     }
 }

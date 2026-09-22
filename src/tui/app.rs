@@ -152,7 +152,7 @@ impl App {
                 aggregation: p.aggregation,
                 pwm_max: p.pwm_max,
                 control: p.control,
-                curve: Curve::from_raw(p.curve.clone()),
+                curve: Curve::new(p.curve.clone()),
                 index: p.index(),
                 mode: p.default.into(),
                 duty: None,
@@ -461,6 +461,7 @@ fn lm_value(json: &str, refname: &str) -> Option<f64> {
 mod tests {
     use super::*;
     use crate::config::types::{ControlKind, InitialMode, Pwm, TempRef, TempSensor};
+    use crate::curve::CurvePoint;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn config() -> Config {
@@ -478,7 +479,7 @@ mod tests {
                 temp_sensor: None,
                 aggregation: Aggregation::Max,
                 control: ControlKind::Curve,
-                curve: vec![[30.0, 0.0], [75.0, 100.0]],
+                curve: vec![CurvePoint::new(30.0, 0.0), CurvePoint::new(75.0, 100.0)],
                 default: InitialMode::Auto,
             }],
             temp_sensors: vec![TempSensor {
@@ -564,7 +565,7 @@ mod tests {
             aggregation: Aggregation::Max,
             pwm_max: 255,
             control: ControlKind::Curve,
-            curve: Curve::from_raw(vec![[0.0, 0.0], [100.0, 100.0]]),
+            curve: Curve::new(vec![CurvePoint::new(0.0, 0.0), CurvePoint::new(100.0, 100.0)]),
             index: None,
             mode: Mode::Auto,
             duty: None,

@@ -4,25 +4,27 @@
 /// A curve is a list of `(temp, duty)` points. Points are sorted by temperature
 /// ascending; the curve is clamped to the first/last duty below/above the
 /// endpoints, and linearly interpolated between them.
-#[derive(Debug, Clone, Copy, PartialEq)]
+
+use serde::{Deserialize, Serialize};
+
+/// A single point on the control curve, used directly in the YAML config:
+///
+/// ```yaml
+/// curve:
+///   - temp: 30.0
+///     duty: 45.0
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CurvePoint {
+    /// The temperature, in °C.
     pub temp: f64,
+    /// The fan duty, in percent (0..=100).
     pub duty: f64,
 }
 
 impl CurvePoint {
-    #[allow(dead_code)]
-    pub fn new(temp: f64, duty: f64) -> Self {
+    pub const fn new(temp: f64, duty: f64) -> Self {
         Self { temp, duty }
-    }
-}
-
-/// Two-element form used directly in the YAML config: `[temp, duty]`.
-pub type RawPoint = [f64; 2];
-
-impl From<RawPoint> for CurvePoint {
-    fn from(p: RawPoint) -> Self {
-        Self { temp: p[0], duty: p[1] }
     }
 }
 
@@ -38,10 +40,6 @@ impl Curve {
         let mut points = points;
         points.sort_by(|a, b| a.temp.partial_cmp(&b.temp).unwrap_or(std::cmp::Ordering::Equal));
         Self { points }
-    }
-
-    pub fn from_raw(raw: Vec<RawPoint>) -> Self {
-        Self::new(raw.into_iter().map(CurvePoint::from).collect())
     }
 
     #[allow(dead_code)]

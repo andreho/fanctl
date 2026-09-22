@@ -15,6 +15,7 @@ use super::app::App;
 mod tests {
     use super::*;
     use crate::config::types::{Aggregation, Config, ControlKind, InitialMode, Pwm, TempRef, TempSensor};
+    use crate::curve::CurvePoint;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use std::fs;
@@ -52,7 +53,7 @@ mod tests {
                 temp_sensor: None,
                 aggregation: Aggregation::Max,
                 control: ControlKind::Curve,
-                curve: vec![[30.0, 0.0], [75.0, 100.0]],
+                curve: vec![CurvePoint::new(30.0, 0.0), CurvePoint::new(75.0, 100.0)],
                 default: InitialMode::Auto,
             }],
             temp_sensors: vec![TempSensor {
