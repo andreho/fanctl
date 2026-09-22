@@ -165,10 +165,10 @@ Two ways to make fan control work as a normal user:
 
 ## Installation
 
-`fanctl` is written in Rust. Install the [toolchain](https://www.rust-lang.org/tools/install), then:
+`fanctl` is written in Rust. Install the [toolchain](https://www.rust-lang.org/tools/install), then build from this repository (the `fanctl` crate name on crates.io belongs to an unrelated project, so use `--git` rather than a bare `cargo install fanctl`):
 
 ```
-cargo install fanctl
+cargo install --git https://github.com/andreho/fanctl
 ```
 
 Pre-built binaries are available from the [releases](https://github.com/andreho/fanctl/releases) page.
