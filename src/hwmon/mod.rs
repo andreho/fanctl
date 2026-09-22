@@ -133,7 +133,15 @@ impl Hwmon {
         self.read_i64(&format!("pwm{n}")).and_then(|v| v.try_into().ok())
     }
 
-    /// The PWM enable/mode bits for channel `n` (0=off, 1=manual, 3=auto, 4=max).
+    /// The current PWM enable/mode bits for channel `n`.
+    ///
+    /// The meaning of the value is **driver-specific**: on the it87 family
+    /// (Linux `it87` driver, e.g. the it8792) the accepted values are
+    /// `0` = off, `1` = manual, `2` = chip auto; other chips (thinkfan-style)
+    /// add `3` = chip auto and `4` = max. We only ever write `1` and `2`
+    /// (off is implemented as a 0% manual duty, see [`Self::set_pwm_off`]),
+    /// which every driver in practice understands (at worst `2` means
+    /// "auto" on all of them).
     pub fn pwm_enable(&self, n: u32) -> Option<u32> {
         self.read_i64(&format!("pwm{n}_enable"))
             .and_then(|v| v.try_into().ok())
@@ -147,19 +155,34 @@ impl Hwmon {
         self.write(&format!("pwm{n}"), &raw.to_string())
     }
 
-    /// Let the chip's own auto-algorithm drive the PWM (`pwm_enable = 3`).
+    /// Let the chip's own auto-algorithm drive the PWM (`pwmN_enable = 2`).
+    ///
+    /// On the it87 family `2` is the chip's "automatic" mode (the kernel
+    /// driver's only auto bit); other hwmon drivers use `2` or `3` for the
+    /// same thing, so this is a safe, portable encoding.
     pub fn set_pwm_auto(&self, n: u32) -> std::io::Result<()> {
-        self.write(&format!("pwm{n}_enable"), "3")
+        self.write(&format!("pwm{n}_enable"), "2")
     }
 
-    /// Drive the PWM to the chip's maximum (`pwm_enable = 4`).
-    pub fn set_pwm_full(&self, n: u32) -> std::io::Result<()> {
-        self.write(&format!("pwm{n}_enable"), "4")
+    /// Drive the PWM at full speed: manual mode (`pwmN_enable = 1`) at the
+    /// chip's maximum value. Some chips expose a dedicated "max" mode bit,
+    /// but the it87 driver has none (values > 2 are a hard -EINVAL), so
+    /// 100% manual is the portable way to get full speed.
+    pub fn set_pwm_full(&self, n: u32, pwm_max: u32) -> std::io::Result<()> {
+        self.set_pwm_manual(n, 100.0, pwm_max)
     }
 
-    /// Turn the PWM off (`pwm_enable = 0`).
-    pub fn set_pwm_off(&self, n: u32) -> std::io::Result<()> {
-        self.write(&format!("pwm{n}_enable"), "0")
+    /// Stop the PWM.
+    ///
+    /// This writes a 0% *manual* duty, not `pwmN_enable = 0`. On the it87
+    /// family (FEAT_FANCTL_ONOFF chips such as the IT8792) the kernel
+    /// driver's "off" path switches the fan to on/off mode but deliberately
+    /// keeps it running at 100% ("make sure the fan is on when in on/off
+    /// mode"), so `0` is not an off at all — it sounds exactly like
+    /// "full". A 0% manual duty stops the fan on that chip, and a 0% duty
+    /// is likewise a stopped fan on the other drivers we support.
+    pub fn set_pwm_off(&self, n: u32, pwm_max: u32) -> std::io::Result<()> {
+        self.set_pwm_manual(n, 0.0, pwm_max)
     }
 
     /// The current duty percentage of the PWM, computed from its raw value and

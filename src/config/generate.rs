@@ -79,6 +79,8 @@ pub fn generate(base: &Path) -> Config {
                 control: ControlKind::Curve,
                 curve: DEFAULT_CURVE.to_vec(),
                 default: InitialMode::Auto,
+                duty_min: None,
+                duty_max: None,
             });
         }
     }

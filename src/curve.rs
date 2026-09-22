@@ -4,8 +4,8 @@
 /// A curve is a list of `(temp, duty)` points. Points are sorted by temperature
 /// ascending; the curve is clamped to the first/last duty below/above the
 /// endpoints, and linearly interpolated between them.
-
-use serde::{Deserialize, Serialize};
+use serde::de::{Error as _, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// A single point on the control curve, used directly in the YAML config:
 ///
@@ -14,12 +14,72 @@ use serde::{Deserialize, Serialize};
 ///   - temp: 30.0
 ///     duty: 45.0
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+///
+/// On deserialization both the current mapping form and the pre-1.1.0
+/// `[temp, duty]` sequence form are accepted, so configs written by older
+/// releases still parse. It always serializes in the mapping form.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct CurvePoint {
     /// The temperature, in °C.
     pub temp: f64,
     /// The fan duty, in percent (0..=100).
     pub duty: f64,
+}
+
+impl<'de> Deserialize<'de> for CurvePoint {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(PointVisitor)
+    }
+}
+
+struct PointVisitor;
+
+impl<'de> Visitor<'de> for PointVisitor {
+    type Value = CurvePoint;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "a {{ temp, duty }} mapping or a legacy [temp, duty] sequence"
+        )
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<CurvePoint, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut temp: Option<f64> = None;
+        let mut duty: Option<f64> = None;
+        while let Some(key) = map.next_key()? {
+            match key {
+                "temp" => temp = Some(map.next_value()?),
+                "duty" => duty = Some(map.next_value()?),
+                _ => {
+                    let _ignored: serde::de::IgnoredAny = map.next_value()?;
+                }
+            }
+        }
+        Ok(CurvePoint {
+            temp: temp.ok_or_else(|| A::Error::missing_field("temp"))?,
+            duty: duty.ok_or_else(|| A::Error::missing_field("duty"))?,
+        })
+    }
+
+    fn visit_seq<S>(self, mut seq: S) -> Result<CurvePoint, S::Error>
+    where
+        S: SeqAccess<'de>,
+    {
+        let temp = seq
+            .next_element()?
+            .ok_or_else(|| S::Error::custom("expected a [temp, duty] pair"))?;
+        let duty = seq
+            .next_element()?
+            .ok_or_else(|| S::Error::custom("expected a [temp, duty] pair"))?;
+        Ok(CurvePoint { temp, duty })
+    }
 }
 
 impl CurvePoint {
@@ -38,7 +98,11 @@ pub struct Curve {
 impl Curve {
     pub fn new(points: Vec<CurvePoint>) -> Self {
         let mut points = points;
-        points.sort_by(|a, b| a.temp.partial_cmp(&b.temp).unwrap_or(std::cmp::Ordering::Equal));
+        points.sort_by(|a, b| {
+            a.temp
+                .partial_cmp(&b.temp)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         Self { points }
     }
 

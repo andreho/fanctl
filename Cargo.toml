@@ -1,14 +1,26 @@
 [package]
 name = "fanctl"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
-description = "A terminal-based Linux tool for fan control and temperature monitoring on any hwmon-equipped machine, driven by a per-fan config file."
+description = "Terminal-based Linux fan control and temperature monitoring: a `fanctld` daemon that drives your fans, and a `fanctlui` client to watch and steer it."
 homepage = "https://github.com/andreho/fanctl"
 repository = "https://github.com/andreho/fanctl"
 readme = "README.md"
 keywords = ["linux", "terminal", "fan", "hwmon", "tui"]
 categories = ["command-line-utilities"]
+
+[lib]
+name = "fanctl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fanctlui"
+path = "src/bin/fanctlui.rs"
+
+[[bin]]
+name = "fanctld"
+path = "src/bin/fanctld.rs"
 
 [dependencies]
 crossterm = "0.29.0"
@@ -16,6 +28,8 @@ ratatui = "0.29.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
 serde_yaml = "0.9.34"
+# Used by the daemon for SIGHUP (config reload) handling.
+libc = "0.2"
 # NVIDIA GPU monitoring: a safe FFI wrapper around the NVIDIA Management
 # Library (libnvidia-ml), which is dlopen'ed at runtime (no link-time
 # dependency, and no subprocesses). Inspired by BDHU/gpuinfo, which uses

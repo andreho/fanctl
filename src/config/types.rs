@@ -113,6 +113,20 @@ pub struct Pwm {
     /// The initial mode.
     #[serde(default)]
     pub default: InitialMode,
+
+    /// The fan's *measured* effective duty range, in percent, from a
+    /// calibration sweep (`fanctlui` key `c` or `fanctld --sweep`): the
+    /// first duty at which the fan spins, and the duty at which it
+    /// saturates. When set, the fan's *curve* is clamped to this range, so
+    /// a 0–100 curve maps onto the part of the duty span the fan actually
+    /// responds to. Explicit commands (an exact duty, `--set`) are not
+    /// clamped. `None` when the fan has not been calibrated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duty_min: Option<f64>,
+
+    /// The top of the measured duty range (see [`Self::duty_min`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duty_max: Option<f64>,
 }
 
 fn default_pwm_max() -> u32 {
@@ -122,9 +136,7 @@ fn default_pwm_max() -> u32 {
 impl Pwm {
     /// The numeric PWM index (`pwm1` -> `1`).
     pub fn index(&self) -> Option<u32> {
-        self.id
-            .strip_prefix("pwm")
-            .and_then(|s| s.parse().ok())
+        self.id.strip_prefix("pwm").and_then(|s| s.parse().ok())
     }
 
     pub fn display_name(&self) -> &str {

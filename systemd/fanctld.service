@@ -1,0 +1,28 @@
+# fanctl — fan-control daemon
+#
+# Install:
+#   sudo cp fanctld /usr/local/bin/
+#   sudo cp fanctld.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now fanctld
+#   sudo systemctl reload fanctld        # reload the config (SIGHUP)
+#
+# The daemon needs write access to /sys/class/hwmon/**/pwm*_*, which is
+# root-only by default — hence the service runs as root. To run it as a
+# normal user instead, see the `udev` rule option in the README.
+
+[Unit]
+Description=fanctl fan-control daemon (fanctl/fanctld)
+Documentation=https://github.com/andreho/fanctl
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fanctld
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

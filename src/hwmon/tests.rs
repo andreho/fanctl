@@ -55,10 +55,15 @@ fn writes_pwm_manual_and_modes() {
     assert_eq!(c.read("pwm1_enable").as_deref(), Some("1"));
     assert_eq!(c.pwm_raw(1), Some(128), "50% of 255 rounds to 128");
 
-    c.set_pwm_off(1).unwrap();
-    assert_eq!(c.read("pwm1_enable").as_deref(), Some("0"));
+    // Off is a 0% manual duty: the it87 family's `pwmN_enable = 0` does not
+    // stop the fan (the driver keeps it on in on/off mode at 100%).
+    c.set_pwm_off(1, 255).unwrap();
+    assert_eq!(c.read("pwm1_enable").as_deref(), Some("1"));
+    assert_eq!(c.pwm_raw(1), Some(0));
     c.set_pwm_auto(1).unwrap();
-    assert_eq!(c.read("pwm1_enable").as_deref(), Some("3"));
-    c.set_pwm_full(1).unwrap();
-    assert_eq!(c.read("pwm1_enable").as_deref(), Some("4"));
+    assert_eq!(c.read("pwm1_enable").as_deref(), Some("2"));
+    c.set_pwm_full(1, 255).unwrap();
+    // `Full` is manual mode at the chip's maximum.
+    assert_eq!(c.read("pwm1_enable").as_deref(), Some("1"));
+    assert_eq!(c.pwm_raw(1), Some(255));
 }
