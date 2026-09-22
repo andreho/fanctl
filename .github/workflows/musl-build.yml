@@ -33,5 +33,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "thinkfan-tui-${{ steps.gitinfo.outputs.hash }}-x86_64-unknown-linux-musl"
-          path: target/x86_64-unknown-linux-musl/release/thinkfan-tui
+          name: "fanctl-${{ steps.gitinfo.outputs.hash }}-x86_64-unknown-linux-musl"
+          path: target/x86_64-unknown-linux-musl/release/fanctl

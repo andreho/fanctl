@@ -1,0 +1,140 @@
+/// A piecewise-linear control curve mapping a temperature (°C) to a fan duty
+/// percentage (0..=100).
+///
+/// A curve is a list of `(temp, duty)` points. Points are sorted by temperature
+/// ascending; the curve is clamped to the first/last duty below/above the
+/// endpoints, and linearly interpolated between them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CurvePoint {
+    pub temp: f64,
+    pub duty: f64,
+}
+
+impl CurvePoint {
+    #[allow(dead_code)]
+    pub fn new(temp: f64, duty: f64) -> Self {
+        Self { temp, duty }
+    }
+}
+
+/// Two-element form used directly in the YAML config: `[temp, duty]`.
+pub type RawPoint = [f64; 2];
+
+impl From<RawPoint> for CurvePoint {
+    fn from(p: RawPoint) -> Self {
+        Self { temp: p[0], duty: p[1] }
+    }
+}
+
+/// The control curve for a single fan.
+#[derive(Debug, Clone, Default)]
+pub struct Curve {
+    /// Points sorted by `temp` ascending.
+    pub points: Vec<CurvePoint>,
+}
+
+impl Curve {
+    pub fn new(points: Vec<CurvePoint>) -> Self {
+        let mut points = points;
+        points.sort_by(|a, b| a.temp.partial_cmp(&b.temp).unwrap_or(std::cmp::Ordering::Equal));
+        Self { points }
+    }
+
+    pub fn from_raw(raw: Vec<RawPoint>) -> Self {
+        Self::new(raw.into_iter().map(CurvePoint::from).collect())
+    }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.points.is_empty()
+    }
+
+    /// Evaluate the curve at `temp`, returning a duty percentage clamped to
+    /// `0..=100`. Falls back to a sensible default when the curve is empty.
+    pub fn evaluate(&self, temp: f64) -> f64 {
+        let pts = &self.points;
+        if pts.is_empty() {
+            return 50.0;
+        }
+
+        // Clamp to the endpoints.
+        if let Some(first) = pts.first() {
+            if temp <= first.temp {
+                return first.duty.clamp(0.0, 100.0);
+            }
+        }
+        if let Some(last) = pts.last() {
+            if temp >= last.temp {
+                return last.duty.clamp(0.0, 100.0);
+            }
+        }
+
+        // Linear interpolation between the surrounding points.
+        for i in 0..pts.len() - 1 {
+            let (t0, d0) = (pts[i].temp, pts[i].duty);
+            let (t1, d1) = (pts[i + 1].temp, pts[i + 1].duty);
+            if temp >= t0 && temp <= t1 {
+                if (t1 - t0).abs() < f64::EPSILON {
+                    return d1;
+                }
+                let f = (temp - t0) / (t1 - t0);
+                return (d0 + f * (d1 - d0)).clamp(0.0, 100.0);
+            }
+        }
+
+        pts.last().unwrap().duty.clamp(0.0, 100.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn curve() -> Curve {
+        Curve::new(vec![
+            CurvePoint::new(30.0, 0.0),
+            CurvePoint::new(45.0, 40.0),
+            CurvePoint::new(60.0, 75.0),
+            CurvePoint::new(75.0, 100.0),
+        ])
+    }
+
+    #[test]
+    fn clamps_below_first() {
+        assert_eq!(curve().evaluate(10.0), 0.0);
+        assert_eq!(curve().evaluate(30.0), 0.0);
+    }
+
+    #[test]
+    fn clamps_above_last() {
+        assert_eq!(curve().evaluate(90.0), 100.0);
+        assert_eq!(curve().evaluate(75.0), 100.0);
+    }
+
+    #[test]
+    fn interpolates_midpoint() {
+        // 37.5 is halfway between 30 (0%) and 45 (40%) -> 20%.
+        assert!((curve().evaluate(37.5) - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn interpolates_across_segment() {
+        // 52.5 is the midpoint of 45 (40%) and 60 (75%) -> 57.5%.
+        assert!((curve().evaluate(52.5) - 57.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn empty_curve_returns_default() {
+        assert_eq!(Curve::default().evaluate(50.0), 50.0);
+    }
+
+    #[test]
+    fn sorts_input_points() {
+        let c = Curve::new(vec![
+            CurvePoint::new(75.0, 100.0),
+            CurvePoint::new(30.0, 0.0),
+        ]);
+        assert_eq!(c.points[0].temp, 30.0);
+        assert_eq!(c.points[1].temp, 75.0);
+    }
+}

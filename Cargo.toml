@@ -1,19 +1,26 @@
 [package]
-name = "thinkfan-tui"
-version = "0.3.1"
+name = "fanctl"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
-description = "A terminal-based Linux application for fan control and temperature monitoring on ThinkPad laptops."
-homepage = "https://github.com/karjonas/thinkfan-tui"
-repository = "https://github.com/karjonas/thinkfan-tui"
+description = "A terminal-based Linux tool for fan control and temperature monitoring on any hwmon-equipped machine, driven by a per-fan config file."
+homepage = "https://github.com/andreho/fanctl"
+repository = "https://github.com/andreho/fanctl"
 readme = "README.md"
-exclude = ["/testdata", "/.github"]
-keywords = ["thinkpad", "terminal", "fan", "commandline", "tui"]
+keywords = ["linux", "terminal", "fan", "hwmon", "tui"]
 categories = ["command-line-utilities"]
 
 [dependencies]
 crossterm = "0.29.0"
 ratatui = "0.29.0"
-serde = "1.0.219"
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
-whoami = "1.6.1"
+serde_yaml = "0.9.34"
+# NVIDIA GPU monitoring: a safe FFI wrapper around the NVIDIA Management
+# Library (libnvidia-ml), which is dlopen'ed at runtime (no link-time
+# dependency, and no subprocesses). Inspired by BDHU/gpuinfo, which uses
+# the same library for the same purpose.
+nvml-wrapper = "0.10"
+
+[dev-dependencies]
+tempfile = "3.14.0"
