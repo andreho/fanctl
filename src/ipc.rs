@@ -20,19 +20,40 @@ use crate::error::Error;
 /// How long a client waits for a response from the daemon.
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The default socket path the daemon listens on (and clients connect to):
-/// `$XDG_RUNTIME_DIR/fanctld.sock`, or `/run/fanctld.sock` when
-/// `XDG_RUNTIME_DIR` is not set (as it isn't for a root system service).
-///
-/// Both the daemon (`--sock`) and the client (`--sock`, or the `FANCTLD_SOCK`
-/// environment variable) can override it.
-pub fn default_socket_path() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_RUNTIME_DIR") {
-        if !xdg.is_empty() {
-            return Path::new(xdg.as_str()).join("fanctld.sock");
-        }
+/// The well-known socket paths a client may auto-connect to, in priority
+/// order: the caller's own `$XDG_RUNTIME_DIR/fanctld.sock` (when
+/// `XDG_RUNTIME_DIR` is set and non-empty), then the system-wide
+/// `/run/fanctld.sock` (where a root system service listens when it has no
+/// `XDG_RUNTIME_DIR`). A daemon binds to the first of these by default;
+/// clients probe them in this order.
+pub fn default_socket_candidates() -> Vec<PathBuf> {
+    let xdg = std::env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|v| !v.is_empty());
+    socket_candidates(xdg.as_deref())
+}
+
+fn socket_candidates(xdg: Option<&str>) -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Some(x) = xdg {
+        v.push(Path::new(x).join("fanctld.sock"));
     }
-    PathBuf::from("/run/fanctld.sock")
+    let system = PathBuf::from("/run/fanctld.sock");
+    if !v.contains(&system) {
+        v.push(system);
+    }
+    v
+}
+
+/// The default socket path the daemon listens on: the first well-known
+/// location. Both the daemon (`--sock`) and the client (`--sock`, or the
+/// `FANCTLD_SOCK` environment variable) can override it.
+pub fn default_socket_path() -> PathBuf {
+    // `default_socket_candidates()` always ends with /run/fanctld.sock.
+    default_socket_candidates()
+        .into_iter()
+        .next()
+        .expect("the well-known socket list is never empty")
 }
 
 /// A request the client sends to the daemon.
@@ -181,6 +202,44 @@ pub struct Client {
 impl Client {
     pub fn new(socket_path: PathBuf) -> Self {
         Self { socket_path }
+    }
+
+    /// Find the first *live* socket in `candidates` (probed in order) by
+    /// connecting to it; the probe connection is dropped at once (the
+    /// daemon treats the resulting EOF as "the client is gone"). Probing
+    /// by connection — rather than file existence — skips stale socket
+    /// files left behind by a dead daemon. When none of the candidates
+    /// is live, the error names every path tried.
+    pub fn find_live(candidates: &[PathBuf]) -> Result<PathBuf, Error> {
+        let mut last_err = None;
+        for path in candidates {
+            match UnixStream::connect(path) {
+                Ok(_) => return Ok(path.clone()),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        let tried = candidates
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let why = last_err
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "no candidates given".into());
+        Err(Error::Msg(format!(
+            "no live fanctld daemon (tried {tried}; {why}): is fanctld running?"
+        )))
+    }
+
+    /// A client for the first live well-known socket (see
+    /// [`default_socket_candidates`]) — used when neither `--sock` nor
+    /// `FANCTLD_SOCK` was given, so the client finds the daemon whether
+    /// it runs as a user (XDG socket) or as a system service (`/run`
+    /// socket).
+    pub fn discover() -> Result<Self, Error> {
+        Ok(Self {
+            socket_path: Self::find_live(&default_socket_candidates())?,
+        })
     }
 
     /// Open a short-lived connection to the daemon.
@@ -332,6 +391,54 @@ mod tests {
         assert!(s.contains("\"settle\":1.5"), "{s}");
         let back: Request = serde_json::from_str(&s).unwrap();
         assert_eq!(back, req);
+    }
+
+    #[test]
+    fn socket_candidates_are_ordered_and_deduped() {
+        assert_eq!(
+            socket_candidates(None),
+            vec![PathBuf::from("/run/fanctld.sock")]
+        );
+        assert_eq!(
+            socket_candidates(Some("/run/user/1000")),
+            vec![
+                PathBuf::from("/run/user/1000/fanctld.sock"),
+                PathBuf::from("/run/fanctld.sock")
+            ]
+        );
+        // An `XDG_RUNTIME_DIR` pointing at `/run` yields the same path
+        // twice.
+        assert_eq!(
+            socket_candidates(Some("/run")),
+            vec![PathBuf::from("/run/fanctld.sock")]
+        );
+    }
+
+    #[test]
+    fn find_live_skips_stale_and_missing_sockets() {
+        use std::os::unix::net::UnixListener;
+
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join("stale.sock"); // exists, no listener
+        std::fs::File::create(&stale).unwrap();
+        let live = dir.path().join("live.sock"); // a real listener
+        let listener = UnixListener::bind(&live).unwrap();
+
+        let found =
+            Client::find_live(&[stale, dir.path().join("missing.sock"), live.clone()]).unwrap();
+        assert_eq!(found, live);
+        drop(listener);
+    }
+
+    #[test]
+    fn find_live_fails_naming_every_tried_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join("stale.sock");
+        std::fs::File::create(&stale).unwrap();
+
+        let err = Client::find_live(&[stale.clone()]).unwrap_err().to_string();
+        assert!(err.contains(&stale.display().to_string()), "{err}");
+        assert!(err.contains("is fanctld running?"), "{err}");
     }
 
     #[test]

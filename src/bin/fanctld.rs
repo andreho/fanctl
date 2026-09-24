@@ -178,17 +178,16 @@ fn one_shot_sweep(
     fan: &str,
     step: u8,
     settle: f64,
-    sock: &Path,
+    probed: &[PathBuf],
     cfg: &config::Config,
     config_path: &Path,
 ) -> i32 {
     // Refuse to run while a daemon owns the fans: its next tick would
     // stomp the sweep's duty.
-    let client = ipc::Client::new(sock.to_path_buf());
-    if let Ok(ipc::Response::State { .. }) = client.request(&ipc::Request::GetState) {
+    if let Ok(live) = ipc::Client::find_live(probed) {
         eprintln!(
             "fanctld: a fanctld daemon is running (socket {}): its ticks would stomp the sweep.",
-            sock.display()
+            live.display()
         );
         eprintln!(
             "fanctld: stop it first, or calibrate from the TUI instead (select the fan, press c)."
@@ -282,19 +281,30 @@ fn main() {
         return;
     }
 
-    // The socket the daemon would serve on: --sock, or $FANCTLD_SOCK, or
-    // the default.
+    // The socket an explicit --sock / $FANCTLD_SOCK points at, if any.
     let sock = args
         .sock
-        .or_else(|| std::env::var("FANCTLD_SOCK").ok().map(PathBuf::from))
-        .unwrap_or_else(ipc::default_socket_path);
+        .or_else(|| std::env::var("FANCTLD_SOCK").ok().map(PathBuf::from));
 
     if let Some(fan) = &args.sweep {
         let step = args.sweep_step.unwrap_or(fanctl::sweep::DEFAULT_STEP);
         let settle = args
             .sweep_settle
             .unwrap_or(fanctl::sweep::DEFAULT_SETTLE_SECS);
-        std::process::exit(one_shot_sweep(fan, step, settle, &sock, &cfg, &config_path));
+        // A running daemon would stomp the sweep: probe the explicit
+        // socket, or every well-known one when none was given.
+        let probed = match &sock {
+            Some(s) => vec![s.clone()],
+            None => ipc::default_socket_candidates(),
+        };
+        std::process::exit(one_shot_sweep(
+            fan,
+            step,
+            settle,
+            &probed,
+            &cfg,
+            &config_path,
+        ));
     }
 
     if !args.sets.is_empty() {
@@ -333,7 +343,10 @@ fn main() {
     // The engine sits behind a `Mutex` (shared with the calibration-sweep
     // threads, which borrow it only briefly).
     let engine = std::sync::Arc::new(std::sync::Mutex::new(engine));
-    if let Err(e) = daemon::run(&sock, &engine, &sighup) {
+    // The daemon binds the explicit socket, or the default well-known
+    // location.
+    let bind = sock.unwrap_or_else(ipc::default_socket_path);
+    if let Err(e) = daemon::run(&bind, &engine, &sighup) {
         eprintln!("fanctld: {e}");
         std::process::exit(1);
     }

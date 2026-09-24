@@ -45,9 +45,13 @@ It works on ThinkPads, desktops, and the wide variety of Super-I/O chips
 - **Each fan's curve can be driven by one or several sensors** (e.g. the CPU
   *and* one or more GPUs) combined with an aggregation — see the config below.
 - **The daemon and the TUI talk a small JSON protocol over a Unix socket**
-  (one request line, one response line per short-lived connection; the default
-  path is `$XDG_RUNTIME_DIR/fanctld.sock`, overridable with `--sock` or the
-  `FANCTLD_SOCK` environment variable), so the TUI works even over SSH.
+  (one request line, one response line per short-lived connection). The
+  daemon listens on `$XDG_RUNTIME_DIR/fanctld.sock`, or on
+  `/run/fanctld.sock` when `XDG_RUNTIME_DIR` is unset (as it is for a root
+  system service); the client finds a live daemon among these well-known
+  paths automatically, or you can point it at another socket with `--sock`
+  or the `FANCTLD_SOCK` environment variable — so the TUI works even over
+  SSH.
 
 ## The configuration file
 
@@ -168,8 +172,9 @@ fanctld --sock /path/to/s.sock   # alternative socket
 
 ## Controlling
 
-In the TUI (`fanctlui`; `--sock FILE` / `FANCTLD_SOCK` to point it at a
-non-default daemon socket):
+In the TUI (`fanctlui` — it finds a live daemon automatically, among
+`$XDG_RUNTIME_DIR/fanctld.sock` and `/run/fanctld.sock`; `--sock FILE` /
+`FANCTLD_SOCK` point it at a non-default socket):
 
 | Key           | Action                                          |
 | ------------- | ----------------------------------------------- |
@@ -309,9 +314,11 @@ Pre-built binaries are available from the [releases](https://github.com/andreho/
 
 ## Troubleshooting
 
-- **The TUI shows “can't reach fanctld”** — the daemon isn't running (or is
-  listening on a different socket). Start it, or point the TUI at it:
-  `fanctlui --sock /run/fanctld.sock`.
+- **The TUI shows “can't reach fanctld”** — or refuses to start with
+  “no live fanctld daemon” — no daemon is listening on any of the
+  well-known sockets. Start one (`sudo systemctl enable --now fanctld`, or
+  by hand), or point the TUI at a non-default socket:
+  `fanctlui --sock /path/to/s.sock`.
 - **No fans shown** — run `fanctld --probe` and confirm your chip appears
   with a `pwm…` entry. Some chips expose PWMs only when a specific
   driver/module is loaded.

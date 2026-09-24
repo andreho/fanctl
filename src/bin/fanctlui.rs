@@ -23,7 +23,8 @@ Usage: fanctlui [OPTIONS]
 
 Options:
   -s, --sock PATH   Connect to the daemon's Unix socket PATH
-                    (default: $XDG_RUNTIME_DIR/fanctld.sock or /run/fanctld.sock;
+                    (default: auto-detected — the first live one among
+                    $XDG_RUNTIME_DIR/fanctld.sock and /run/fanctld.sock;
                     can also be set via the FANCTLD_SOCK environment variable)
       --set FAN=MODE  One-shot: apply MODE to the fan FAN (its pwmN id)
                       through the daemon and exit. MODE is a percent (0-100)
@@ -83,12 +84,22 @@ fn parse_args() -> Args {
     Args { sock, sets }
 }
 
+/// The client to use: an explicit `--sock` / `FANCTLD_SOCK` wins;
+/// otherwise probe the well-known sockets in order and take the first
+/// live one (a user daemon's XDG socket, then a system daemon's
+/// `/run` socket).
+fn client_from(sock: Option<PathBuf>) -> ipc::Client {
+    match sock {
+        Some(path) => ipc::Client::new(path),
+        None => ipc::Client::discover().unwrap_or_else(|e| fail(&e.to_string())),
+    }
+}
+
 fn main() {
     let args = parse_args();
     let sock = args
         .sock
-        .or_else(|| std::env::var("FANCTLD_SOCK").ok().map(PathBuf::from))
-        .unwrap_or_else(ipc::default_socket_path);
+        .or_else(|| std::env::var("FANCTLD_SOCK").ok().map(PathBuf::from));
 
     if !args.sets.is_empty() {
         // One-shot mode: no terminal involved, so no TTY guard either.
@@ -101,7 +112,7 @@ fn main() {
             })
             .collect();
 
-        let client = ipc::Client::new(sock);
+        let client = client_from(sock);
         let mut failed = false;
         for p in &parsed {
             match client.request(&ipc::Request::SetMode {
@@ -146,7 +157,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let client = ipc::Client::new(sock);
+    let client = client_from(sock);
     let mut app = tui::App::new(client);
 
     let mut terminal = ratatui::init();

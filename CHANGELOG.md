@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - **`fanctlui`** — the TUI client. It renders the state served by the
   daemon and sends fan commands; it no longer talks to the hardware itself,
   so the fans stay under the daemon's control whenever the TUI is closed.
+- **Automatic daemon discovery in `fanctlui`** — when neither `--sock` nor
+  `FANCTLD_SOCK` is set, the client probes the well-known sockets
+  (`$XDG_RUNTIME_DIR/fanctld.sock`, then `/run/fanctld.sock`) by connecting
+  to them and uses the first live one, so a root system daemon is found even
+  from a shell whose `XDG_RUNTIME_DIR` points elsewhere (and stale socket
+  files left by a dead daemon are skipped). `fanctld --sweep` checks those
+  same sockets for a running daemon before it starts.
 - The one-shot `--probe` / `--summary` modes (and the `-c` config flag) now
   live on `fanctld`.
 - **`--summary` now leads with a `PWM channels` section** listing every
