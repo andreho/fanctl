@@ -13,10 +13,7 @@ pub struct TempReading {
 }
 
 /// Read a single hwmon temperature sensor.
-pub fn read_hwmon(
-    chip: &crate::hwmon::Hwmon,
-    sensor: &str,
-) -> Option<TempReading> {
+pub fn read_hwmon(chip: &crate::hwmon::Hwmon, sensor: &str) -> Option<TempReading> {
     let value = chip.read_i64(&format!("{sensor}_input"))?;
     let label = chip
         .read(&format!("{sensor}_label"))
@@ -30,11 +27,7 @@ pub fn read_hwmon(
 
 /// Read a temperature sensor from the `sensors -j` (lm-sensors) output.
 #[allow(dead_code)]
-pub fn read_lm_sensors(
-    json: &str,
-    chip: &str,
-    sensor: &str,
-) -> Option<TempReading> {
+pub fn read_lm_sensors(json: &str, chip: &str, sensor: &str) -> Option<TempReading> {
     let v: serde_json::Value = serde_json::from_str(json).ok()?;
     let chip_obj = v.get(chip)?;
     let sensor_obj = chip_obj.get(sensor)?;
@@ -75,7 +68,8 @@ fn nvml() -> Option<&'static nvml_wrapper::Nvml> {
     use std::sync::OnceLock;
     static NVML: OnceLock<Option<nvml_wrapper::Nvml>> = OnceLock::new();
     // `None` is cached permanently once init has failed (i.e. no driver).
-    NVML.get_or_init(|| nvml_wrapper::Nvml::init().ok()).as_ref()
+    NVML.get_or_init(|| nvml_wrapper::Nvml::init().ok())
+        .as_ref()
 }
 
 /// Read all NVIDIA GPUs. Primary path: NVML directly (no subprocess). If the
@@ -230,10 +224,7 @@ mod tests {
             temp_c: Some(90.0),
             fan_percent: None,
         }];
-        assert_eq!(
-            read_sensor(&[], &nvidia, "nvidia", "gpu0"),
-            Some(90.0)
-        );
+        assert_eq!(read_sensor(&[], &nvidia, "nvidia", "gpu0"), Some(90.0));
         // Out-of-range index -> None.
         assert_eq!(read_sensor(&[], &nvidia, "nvidia", "gpu5"), None);
     }

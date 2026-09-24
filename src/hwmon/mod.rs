@@ -35,7 +35,11 @@ pub fn discover(base: &Path) -> Vec<Hwmon> {
 
     for e in &entries {
         let p = e.path();
-        let dir = p.file_name().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+        let dir = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
         if !dir.starts_with("hwmon") || !p.is_dir() {
             continue;
         }
@@ -74,7 +78,9 @@ impl Hwmon {
 
     /// Read a file from this chip, returning the trimmed string.
     pub fn read(&self, name: &str) -> Option<String> {
-        fs::read_to_string(self.file(name)).ok().map(|s| s.trim().to_string())
+        fs::read_to_string(self.file(name))
+            .ok()
+            .map(|s| s.trim().to_string())
     }
 
     pub fn read_i64(&self, name: &str) -> Option<i64> {
@@ -130,7 +136,8 @@ impl Hwmon {
 
     /// The current raw PWM value for channel `n`, if readable.
     pub fn pwm_raw(&self, n: u32) -> Option<u32> {
-        self.read_i64(&format!("pwm{n}")).and_then(|v| v.try_into().ok())
+        self.read_i64(&format!("pwm{n}"))
+            .and_then(|v| v.try_into().ok())
     }
 
     /// The current PWM enable/mode bits for channel `n`.
